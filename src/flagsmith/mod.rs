@@ -341,6 +341,8 @@ async fn get_json_response(
     url: String,
     body: Option<String>,
 ) -> Result<serde_json::Value, error::Error> {
+    log::debug!("{}: {}", method, url);
+
     let mut request = client.request(method, url);
     if body.is_some() {
         request = request.body(body.unwrap());
