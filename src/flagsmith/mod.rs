@@ -15,7 +15,7 @@ pub mod models;
 use self::analytics::AnalyticsProcessor;
 use self::models::{Flag, Flags};
 use super::error;
-use std::sync::mpsc::{self, Sender, TryRecvError};
+use std::sync::mpsc::{self, SyncSender, TryRecvError};
 
 const DEFAULT_API_URL: &str = "https://edge.flagsmith.com/api/v1/";
 
@@ -51,7 +51,7 @@ pub struct Flagsmith {
     options: FlagsmithOptions,
     datastore: Arc<Mutex<DataStore>>,
     analytics_processor: Option<AnalyticsProcessor>,
-    _polling_thead_tx: Sender<u32>, // used for shutting down polling manager
+    _polling_thead_tx: SyncSender<u32>, // used for shutting down polling manager
 }
 
 struct DataStore {
@@ -89,7 +89,7 @@ impl Flagsmith {
         // Put the environment model behind mutex to
         // to share it safely between threads
         let ds = Arc::new(Mutex::new(DataStore { environment: None }));
-        let (tx, rx) = mpsc::channel::<u32>();
+        let (tx, rx) = mpsc::sync_channel::<u32>(10);
         let flagsmith = Flagsmith {
             client: client.clone(),
             environment_flags_url,
