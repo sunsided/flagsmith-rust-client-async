@@ -17,13 +17,13 @@ pub struct Flag {
 
 impl Flag {
     pub fn from_feature_state(feature_state: FeatureState, identity_id: Option<&str>) -> Flag {
-        return Flag {
+        Flag {
             enabled: feature_state.enabled,
             value: feature_state.get_value(identity_id),
             is_default: false,
             feature_name: feature_state.feature.name,
             feature_id: feature_state.feature.id,
-        };
+        }
     }
 
     pub fn from_api_flag(flag_json: &serde_json::Value) -> Option<Flag> {
@@ -90,11 +90,11 @@ impl Flags {
                 Flag::from_feature_state(feature_state.to_owned(), identity_id),
             );
         }
-        return Flags {
+        Flags {
             flags,
             analytics_processor,
             default_flag_handler,
-        };
+        }
     }
     pub fn from_api_flags(
         api_flags: &Vec<serde_json::Value>,
@@ -106,16 +106,16 @@ impl Flags {
             let flag = Flag::from_api_flag(flag_json)?;
             flags.insert(flag.feature_name.clone(), flag);
         }
-        return Some(Flags {
+        Some(Flags {
             flags,
             analytics_processor,
             default_flag_handler,
-        });
+        })
     }
 
     // Returns a vector of all `Flag` structs
     pub fn all_flags(&self) -> Vec<Flag> {
-        return self.flags.clone().into_values().collect();
+        self.flags.clone().into_values().collect()
     }
 
     // Check whether a given feature is enabled.
@@ -128,7 +128,7 @@ impl Flags {
     // Or error if the feature is not found
     pub fn get_feature_value_as_string(&self, feature_name: &str) -> Result<String, error::Error> {
         let flag = self.get_flag(feature_name)?;
-        return Ok(flag.value.value);
+        Ok(flag.value.value)
     }
 
     // Returns a specific `Flag` given the feature name
@@ -143,7 +143,7 @@ impl Flags {
                         .tx
                         .send(flag.feature_id);
                 };
-                return Ok(flag.clone());
+                Ok(flag.clone())
             }
             None => match self.default_flag_handler {
                 Some(handler) => Ok(handler(feature_name)),
@@ -183,13 +183,12 @@ mod tests {
     #[test]
     fn can_create_flag_from_feature_state() {
         // Given
-        let feature_state: FeatureState =
-            serde_json::from_str(FEATURE_STATE_JSON_STRING.clone()).unwrap();
+        let feature_state: FeatureState = serde_json::from_str(FEATURE_STATE_JSON_STRING).unwrap();
         // When
         let flag = Flag::from_feature_state(feature_state.clone(), None);
         // Then
+        assert!(!flag.is_default);
         assert_eq!(flag.feature_name, feature_state.feature.name);
-        assert_eq!(flag.is_default, false);
         assert_eq!(flag.enabled, feature_state.enabled);
         assert_eq!(flag.value, feature_state.get_value(None));
         assert_eq!(flag.feature_id, feature_state.feature.id);
@@ -207,6 +206,7 @@ mod tests {
         let flag = Flag::from_api_flag(&feature_state_json).unwrap();
 
         // Then
+        assert!(!flag.is_default);
         assert_eq!(
             flag.feature_name,
             feature_state_json["feature"]["name"].as_str().unwrap()
@@ -215,7 +215,6 @@ mod tests {
             flag.feature_id,
             feature_state_json["feature"]["id"].as_u64().unwrap() as u32
         );
-        assert_eq!(flag.is_default, false);
         assert_eq!(
             flag.enabled,
             feature_state_json["enabled"].as_bool().unwrap()
@@ -266,7 +265,7 @@ mod tests {
         let flag = Flag::from_api_flag(&feature_state_json).unwrap();
 
         // Then
-        assert_eq!(flag.value_as_bool().unwrap(), true);
+        assert!(flag.value_as_bool().unwrap());
     }
 
     #[test]
@@ -334,6 +333,6 @@ mod tests {
         let flag = Flag::from_api_flag(&feature_state_json).unwrap();
 
         // Then
-        assert_eq!(flag.value_as_i64().is_none(), true);
+        assert!(flag.value_as_i64().is_none());
     }
 }

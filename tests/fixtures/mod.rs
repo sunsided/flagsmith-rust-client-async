@@ -152,7 +152,7 @@ pub fn mock_server() -> MockServer {
 }
 
 #[fixture]
-pub fn local_eval_flagsmith(
+pub async fn local_eval_flagsmith(
     environment_json: serde_json::Value,
     mock_server: MockServer,
 ) -> Flagsmith {
@@ -169,8 +169,8 @@ pub fn local_eval_flagsmith(
         enable_local_evaluation: true,
         ..Default::default()
     };
-    let mut flagsmith = Flagsmith::new(ENVIRONMENT_KEY.to_string(), flagsmith_options);
+    let mut flagsmith = Flagsmith::new(ENVIRONMENT_KEY.to_string(), flagsmith_options).await;
 
-    flagsmith.update_environment().unwrap();
-    return flagsmith;
+    flagsmith.update_environment().await.unwrap();
+    flagsmith
 }

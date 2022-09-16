@@ -4,10 +4,11 @@ use flagsmith_flag_engine::environments::Environment;
 use flagsmith_flag_engine::identities::{Identity, Trait};
 use flagsmith_flag_engine::segments::evaluator::get_identity_segments;
 use flagsmith_flag_engine::segments::Segment;
+use futures::lock::Mutex;
 use log::debug;
 use reqwest::header::{self, HeaderMap};
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{thread, time::Duration};
 mod analytics;
 pub mod models;
@@ -43,7 +44,7 @@ impl Default for FlagsmithOptions {
 }
 
 pub struct Flagsmith {
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
     environment_flags_url: String,
     identities_url: String,
     environment_url: String,
@@ -58,7 +59,7 @@ struct DataStore {
 }
 
 impl Flagsmith {
-    pub fn new(environment_key: String, flagsmith_options: FlagsmithOptions) -> Self {
+    pub async fn new(environment_key: String, flagsmith_options: FlagsmithOptions) -> Self {
         let mut headers = flagsmith_options.custom_headers.clone();
         headers.insert(
             "X-Environment-Key",
@@ -66,7 +67,7 @@ impl Flagsmith {
         );
         headers.insert("Content-Type", "application/json".parse().unwrap());
         let timeout = Duration::from_secs(flagsmith_options.request_timeout_seconds);
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .default_headers(headers.clone())
             .timeout(timeout)
             .build()
@@ -106,34 +107,37 @@ impl Flagsmith {
             flagsmith.options.environment_refresh_interval_mills;
         if flagsmith.options.enable_local_evaluation {
             let ds = Arc::clone(&ds);
-            thread::spawn(move || loop {
-                match rx.try_recv() {
-                    Ok(_) | Err(TryRecvError::Disconnected) => {
-                        debug!("shutting down polling manager");
-                        break;
+            tokio::spawn(async move {
+                loop {
+                    match rx.try_recv() {
+                        Ok(_) | Err(TryRecvError::Disconnected) => {
+                            debug!("shutting down polling manager");
+                            break;
+                        }
+                        Err(TryRecvError::Empty) => {}
                     }
-                    Err(TryRecvError::Empty) => {}
-                }
 
-                let environment = Some(
-                    get_environment_from_api(&client, environment_url.clone())
-                        .expect("updating environment document failed"),
-                );
-                let mut data = ds.lock().unwrap();
-                data.environment = environment;
-                thread::sleep(Duration::from_millis(environment_refresh_interval_mills));
+                    let environment = Some(
+                        get_environment_from_api(&client, environment_url.clone())
+                            .await
+                            .expect("updating environment document failed"),
+                    );
+                    let mut data = ds.lock().await;
+                    data.environment = environment;
+                    thread::sleep(Duration::from_millis(environment_refresh_interval_mills));
+                }
             });
         }
-        return flagsmith;
+        flagsmith
     }
     //Returns `Flags` struct holding all the flags for the current environment.
-    pub fn get_environment_flags(&self) -> Result<models::Flags, error::Error> {
-        let data = self.datastore.lock().unwrap();
+    pub async fn get_environment_flags(&self) -> Result<models::Flags, error::Error> {
+        let data = self.datastore.lock().await;
         if data.environment.is_some() {
             let environment = data.environment.as_ref().unwrap();
             return Ok(self.get_environment_flags_from_document(environment));
         }
-        return self.default_handler_if_err(self.get_environment_flags_from_api());
+        self.default_handler_if_err(self.get_environment_flags_from_api().await)
     }
 
     // Returns all the flags for the current environment for a given identity. Will also
@@ -156,26 +160,26 @@ impl Flagsmith {
     //     let flags = flagsmith.get_identity_flags("user_identifier".to_string(), traits);
     // }
     //```
-    pub fn get_identity_flags(
+    pub async fn get_identity_flags(
         &self,
         identifier: &str,
         traits: Option<Vec<Trait>>,
     ) -> Result<Flags, error::Error> {
-        let data = self.datastore.lock().unwrap();
-        let traits = traits.unwrap_or(vec![]);
+        let data = self.datastore.lock().await;
+        let traits = traits.unwrap_or_default();
         if data.environment.is_some() {
             let environment = data.environment.as_ref().unwrap();
             return self.get_identity_flags_from_document(environment, identifier, traits);
         }
-        return self.default_handler_if_err(self.get_identity_flags_from_api(identifier, traits));
+        self.default_handler_if_err(self.get_identity_flags_from_api(identifier, traits).await)
     }
     // Returns a list of segments that the given identity is part of
-    pub fn get_identity_segments(
+    pub async fn get_identity_segments(
         &self,
         identifier: &str,
         traits: Option<Vec<Trait>>,
     ) -> Result<Vec<Segment>, error::Error> {
-        let data = self.datastore.lock().unwrap();
+        let data = self.datastore.lock().await;
         if data.environment.is_none() {
             return Err(error::Error::new(
                 error::ErrorKind::FlagsmithClientError,
@@ -184,9 +188,9 @@ impl Flagsmith {
         }
         let environment = data.environment.as_ref().unwrap();
         let identity_model =
-            self.build_identity_model(environment, identifier, traits.clone().unwrap_or(vec![]))?;
+            self.build_identity_model(environment, identifier, traits.clone().unwrap_or_default())?;
         let segments = get_identity_segments(environment, &identity_model, traits.as_ref());
-        return Ok(segments);
+        Ok(segments)
     }
 
     fn default_handler_if_err(
@@ -197,12 +201,12 @@ impl Flagsmith {
             Ok(result) => Ok(result),
             Err(e) => {
                 if self.options.default_flag_handler.is_some() {
-                    return Ok(Flags::from_api_flags(
+                    Ok(Flags::from_api_flags(
                         &vec![],
                         self.analytics_processor.clone(),
                         self.options.default_flag_handler,
                     )
-                    .unwrap());
+                    .unwrap())
                 } else {
                     Err(e)
                 }
@@ -210,20 +214,18 @@ impl Flagsmith {
         }
     }
     fn get_environment_flags_from_document(&self, environment: &Environment) -> models::Flags {
-        return models::Flags::from_feature_states(
+        models::Flags::from_feature_states(
             &environment.feature_states,
             self.analytics_processor.clone(),
             self.options.default_flag_handler,
             None,
-        );
+        )
     }
-    pub fn update_environment(&mut self) -> Result<(), error::Error> {
-        let mut data = self.datastore.lock().unwrap();
-        data.environment = Some(get_environment_from_api(
-            &self.client,
-            self.environment_url.clone(),
-        )?);
-        return Ok(());
+    pub async fn update_environment(&mut self) -> Result<(), error::Error> {
+        let mut data = self.datastore.lock().await;
+        data.environment =
+            Some(get_environment_from_api(&self.client, self.environment_url.clone()).await?);
+        Ok(())
     }
 
     fn get_identity_flags_from_document(
@@ -241,7 +243,7 @@ impl Flagsmith {
             self.options.default_flag_handler,
             Some(&identity.composite_key()),
         );
-        return Ok(flags);
+        Ok(flags)
     }
 
     fn build_identity_model(
@@ -254,7 +256,7 @@ impl Flagsmith {
         identity.identity_traits = traits;
         Ok(identity)
     }
-    fn get_identity_flags_from_api(
+    async fn get_identity_flags_from_api(
         &self,
         identifier: &str,
         traits: Vec<Trait>,
@@ -267,63 +269,73 @@ impl Flagsmith {
             method,
             self.identities_url.clone(),
             Some(json.to_string()),
-        )?;
+        )
+        .await?;
         // Cast to array of values
-        let api_flags = response["flags"].as_array().ok_or(error::Error::new(
-            error::ErrorKind::FlagsmithAPIError,
-            "Unable to get valid response from Flagsmith API.".to_string(),
-        ))?;
+        let api_flags = response["flags"].as_array().ok_or_else(|| {
+            error::Error::new(
+                error::ErrorKind::FlagsmithAPIError,
+                "Unable to get valid response from Flagsmith API.".to_string(),
+            )
+        })?;
 
         let flags = Flags::from_api_flags(
             api_flags,
             self.analytics_processor.clone(),
             self.options.default_flag_handler,
         )
-        .ok_or(error::Error::new(
-            error::ErrorKind::FlagsmithAPIError,
-            "Unable to get valid response from Flagsmith API.".to_string(),
-        ))?;
-        return Ok(flags);
+        .ok_or_else(|| {
+            error::Error::new(
+                error::ErrorKind::FlagsmithAPIError,
+                "Unable to get valid response from Flagsmith API.".to_string(),
+            )
+        })?;
+        Ok(flags)
     }
-    fn get_environment_flags_from_api(&self) -> Result<Flags, error::Error> {
+    async fn get_environment_flags_from_api(&self) -> Result<Flags, error::Error> {
         let method = reqwest::Method::GET;
         let api_flags = get_json_response(
             &self.client,
             method,
             self.environment_flags_url.clone(),
             None,
-        )?;
+        )
+        .await?;
         // Cast to array of values
-        let api_flags = api_flags.as_array().ok_or(error::Error::new(
-            error::ErrorKind::FlagsmithAPIError,
-            "Unable to get valid response from Flagsmith API.".to_string(),
-        ))?;
+        let api_flags = api_flags.as_array().ok_or_else(|| {
+            error::Error::new(
+                error::ErrorKind::FlagsmithAPIError,
+                "Unable to get valid response from Flagsmith API.".to_string(),
+            )
+        })?;
 
         let flags = Flags::from_api_flags(
             api_flags,
             self.analytics_processor.clone(),
             self.options.default_flag_handler,
         )
-        .ok_or(error::Error::new(
-            error::ErrorKind::FlagsmithAPIError,
-            "Unable to get valid response from Flagsmith API.".to_string(),
-        ))?;
-        return Ok(flags);
+        .ok_or_else(|| {
+            error::Error::new(
+                error::ErrorKind::FlagsmithAPIError,
+                "Unable to get valid response from Flagsmith API.".to_string(),
+            )
+        })?;
+        Ok(flags)
     }
 }
 
-fn get_environment_from_api(
-    client: &reqwest::blocking::Client,
+async fn get_environment_from_api(
+    client: &reqwest::Client,
     environment_url: String,
 ) -> Result<Environment, error::Error> {
     let method = reqwest::Method::GET;
-    let json_document = get_json_response(client, method, environment_url, None)?;
+    let json_document = get_json_response(client, method, environment_url, None).await?;
     let environment = build_environment_struct(json_document);
-    return Ok(environment);
+    Ok(environment)
 }
 
-fn get_json_response(
-    client: &reqwest::blocking::Client,
+async fn get_json_response(
+    client: &reqwest::Client,
     method: reqwest::Method,
     url: String,
     body: Option<String>,
@@ -332,14 +344,14 @@ fn get_json_response(
     if body.is_some() {
         request = request.body(body.unwrap());
     };
-    let response = request.send()?;
+    let response = request.send().await?;
     if response.status().is_success() {
-        return Ok(response.json()?);
+        Ok(response.json().await?)
     } else {
-        return Err(error::Error::new(
+        Err(error::Error::new(
             error::ErrorKind::FlagsmithAPIError,
-            response.text()?,
-        ));
+            response.text().await?,
+        ))
     }
 }
 
@@ -368,8 +380,8 @@ mod tests {
             "feature_states": []
     }"#;
 
-    #[test]
-    fn polling_thread_updates_environment_on_start() {
+    #[tokio::test]
+    async fn polling_thread_updates_environment_on_start() {
         // Given
         let environment_key = "ser.test_environment_key";
         let response_body: serde_json::Value = serde_json::from_str(ENVIRONMENT_JSON).unwrap();
@@ -390,15 +402,16 @@ mod tests {
             ..Default::default()
         };
         // When
-        let _flagsmith = Flagsmith::new(environment_key.to_string(), flagsmith_options);
+        let _flagsmith = Flagsmith::new(environment_key.to_string(), flagsmith_options).await;
+
         // let's wait for the thread to make the request
-        thread::sleep(std::time::Duration::from_millis(50));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         // Then
         api_mock.assert();
     }
 
-    #[test]
-    fn polling_thread_updates_environment_on_each_refresh() {
+    #[tokio::test]
+    async fn polling_thread_updates_environment_on_each_refresh() {
         // Given
         let environment_key = "ser.test_environment_key";
         let response_body: serde_json::Value = serde_json::from_str(ENVIRONMENT_JSON).unwrap();
@@ -420,8 +433,8 @@ mod tests {
             ..Default::default()
         };
         // When
-        let _flagsmith = Flagsmith::new(environment_key.to_string(), flagsmith_options);
-        thread::sleep(std::time::Duration::from_millis(250));
+        let _flagsmith = Flagsmith::new(environment_key.to_string(), flagsmith_options).await;
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         // Then
         // 3 api calls to update environment should be made, one when the thread starts and 2
         // for each subsequent refresh

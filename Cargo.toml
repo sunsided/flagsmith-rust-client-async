@@ -1,7 +1,7 @@
 [package]
-name = "flagsmith"
+name = "flagsmith-async"
 version = "1.0.0"
-authors = ["Gagan Trivedi <gagan.trivedi@flagsmith.com>"]
+authors = ["Gagan Trivedi <gagan.trivedi@flagsmith.com>", "Michał Buczko <michal@buczko.pl>"]
 edition = "2021"
 license = "BSD-3-Clause"
 description = "Flagsmith SDK for Rust"
@@ -14,9 +14,11 @@ keywords = ["Flagsmith", "feature-flag", "remote-config"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio = {version = "1.17"}
+futures = {version = "0.3"}
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-reqwest = { version = "0.11", features = ["json", "blocking"] }
+reqwest = { version = "0.11", features = ["json"] }
 url = "2.1"
 chrono = { version = "0.4"}
 log = "0.4"

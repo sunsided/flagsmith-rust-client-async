@@ -1,11 +1,11 @@
 use log::{debug, warn};
 use reqwest::header::HeaderMap;
 use serde_json;
-use std::sync::mpsc;
+use std::collections::HashMap;
 use std::sync::mpsc::{Sender, TryRecvError};
-use std::{collections::HashMap, thread};
+use std::sync::{mpsc, Arc};
+use tokio::sync::RwLock;
 
-use std::sync::{Arc,  RwLock};
 static ANALYTICS_TIMER_IN_MILLI: u64 = 10 * 1000;
 
 #[derive(Clone, Debug)]
@@ -22,7 +22,7 @@ impl AnalyticsProcessor {
         timer: Option<u64>,
     ) -> Self {
         let (tx, rx) = mpsc::channel::<u32>();
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .default_headers(headers)
             .timeout(timeout)
             .build()
@@ -34,57 +34,54 @@ impl AnalyticsProcessor {
             Arc::new(RwLock::new(HashMap::new()));
 
         let analytics_data_locked = Arc::clone(&analytics_data_arc);
-        thread::Builder::new()
-            .name("Analytics Processor".to_string())
-            .spawn(move || {
-                let mut last_flushed = chrono::Utc::now();
-                loop {
-                    let data = rx.try_recv();
-                    let mut analytics_data = analytics_data_locked.write().unwrap();
-                    match data {
-                        // Update the analytics data with feature_id received
-                        Ok(feature_id) => {
-                            analytics_data
-                                .entry(feature_id)
-                                .and_modify(|e| *e += 1)
-                                .or_insert(1);
-                        }
-                        Err(TryRecvError::Empty) => {}
-                        Err(TryRecvError::Disconnected) => {
-                            debug!("Shutting down analytics thread ");
-                            break;
-                        }
-                    };
-                    if (chrono::Utc::now() - last_flushed).num_milliseconds() > timer as i64 {
-                        flush(&client, &analytics_data, &analytics_endpoint);
-                        analytics_data.clear();
-                        last_flushed = chrono::Utc::now();
+        tokio::spawn(async move {
+            let mut last_flushed = chrono::Utc::now();
+            loop {
+                let data = rx.try_recv();
+                let mut analytics_data = analytics_data_locked.write().await;
+                match data {
+                    // Update the analytics data with feature_id received
+                    Ok(feature_id) => {
+                        analytics_data
+                            .entry(feature_id)
+                            .and_modify(|e| *e += 1)
+                            .or_insert(1);
                     }
+                    Err(TryRecvError::Empty) => {}
+                    Err(TryRecvError::Disconnected) => {
+                        debug!("Shutting down analytics thread ");
+                        break;
+                    }
+                };
+                if (chrono::Utc::now() - last_flushed).num_milliseconds() > timer as i64 {
+                    flush(&client, &analytics_data, &analytics_endpoint).await;
+                    analytics_data.clear();
+                    last_flushed = chrono::Utc::now();
                 }
-            })
-            .expect("Failed to start analytics thread");
+            }
+        });
 
-        return AnalyticsProcessor {
+        AnalyticsProcessor {
             tx,
             _analytics_data: Arc::clone(&analytics_data_arc),
-        };
+        }
     }
     pub fn track_feature(&self, feature_id: u32) {
         self.tx.send(feature_id).unwrap();
     }
 }
 
-fn flush(
-    client: &reqwest::blocking::Client,
+async fn flush(
+    client: &reqwest::Client,
     analytics_data: &HashMap<u32, u32>,
     analytics_endpoint: &str,
 ) {
-    if analytics_data.len() == 0 {
+    if analytics_data.is_empty() {
         return;
     }
     let body = serde_json::to_string(&analytics_data).unwrap();
     let resp = client.post(analytics_endpoint).body(body).send();
-    if resp.is_err() {
+    if resp.await.is_err() {
         warn!("Failed to send analytics data");
     }
 }
@@ -95,8 +92,8 @@ mod tests {
     use httpmock::prelude::*;
     use reqwest::header;
 
-    #[test]
-    fn track_feature_updates_analytics_data() {
+    #[tokio::test]
+    async fn track_feature_updates_analytics_data() {
         // Given
         let feature_1 = 1;
         let processor = AnalyticsProcessor::new(
@@ -109,14 +106,14 @@ mod tests {
         processor.track_feature(feature_1);
         processor.track_feature(feature_1);
         // Wait a little for it to receive the message
-        thread::sleep(std::time::Duration::from_millis(50));
-        let analytics_data = processor._analytics_data.read().unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let analytics_data = processor._analytics_data.read().await;
         // Then, verify that analytics_data was updated correctly
         assert_eq!(analytics_data[&feature_1], 2);
     }
 
-    #[test]
-    fn test_analytics_processor() {
+    #[tokio::test]
+    async fn test_analytics_processor() {
         // Given
         let feature_1 = 1;
         let feature_2 = 2;
@@ -135,25 +132,21 @@ mod tests {
         );
         let url = server.url("/api/v1/");
 
-        let processor = AnalyticsProcessor::new(
-            url.to_string(),
-            headers,
-            std::time::Duration::from_secs(10),
-            Some(10),
-        );
+        let processor =
+            AnalyticsProcessor::new(url, headers, std::time::Duration::from_secs(10), Some(10));
         // Now, let's update the analytics data
-        let mut analytics_data = processor._analytics_data.write().unwrap();
+        let mut analytics_data = processor._analytics_data.write().await;
         analytics_data.insert(1, 10);
         analytics_data.insert(2, 10);
         // drop the analytics data to release the lock
         drop(analytics_data);
         // Next, let's sleep a little to let the processor flush the data
-        thread::sleep(std::time::Duration::from_millis(50));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
         // Finally, let's assert that the mock was called
         first_invocation_mock.assert();
         // and, analytics data is now empty
-        let analytics_data = processor._analytics_data.read().unwrap();
-        assert_eq!(true, analytics_data.is_empty())
+        let analytics_data = processor._analytics_data.read().await;
+        assert!(analytics_data.is_empty())
     }
 }
