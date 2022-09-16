@@ -2,7 +2,7 @@ use log::{debug, warn};
 use reqwest::header::HeaderMap;
 use serde_json;
 use std::collections::HashMap;
-use std::sync::mpsc::{Sender, TryRecvError};
+use std::sync::mpsc::{SyncSender, TryRecvError};
 use std::sync::{mpsc, Arc};
 use tokio::sync::RwLock;
 
@@ -10,7 +10,7 @@ static ANALYTICS_TIMER_IN_MILLI: u64 = 10 * 1000;
 
 #[derive(Clone, Debug)]
 pub struct AnalyticsProcessor {
-    pub tx: Sender<u32>,
+    pub tx: SyncSender<u32>,
     _analytics_data: Arc<RwLock<HashMap<u32, u32>>>,
 }
 
@@ -21,7 +21,7 @@ impl AnalyticsProcessor {
         timeout: std::time::Duration,
         timer: Option<u64>,
     ) -> Self {
-        let (tx, rx) = mpsc::channel::<u32>();
+        let (tx, rx) = mpsc::sync_channel::<u32>(10);
         let client = reqwest::Client::builder()
             .default_headers(headers)
             .timeout(timeout)
