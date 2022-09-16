@@ -9,7 +9,7 @@ use log::debug;
 use reqwest::header::{self, HeaderMap};
 use serde_json::json;
 use std::sync::Arc;
-use std::{thread, time::Duration};
+use std::time::Duration;
 mod analytics;
 pub mod models;
 use self::analytics::AnalyticsProcessor;
@@ -124,7 +124,7 @@ impl Flagsmith {
                     );
                     let mut data = ds.lock().await;
                     data.environment = environment;
-                    thread::sleep(Duration::from_millis(environment_refresh_interval_mills));
+                    tokio::time::sleep(Duration::from_millis(environment_refresh_interval_mills)).await;
                 }
             });
         }
