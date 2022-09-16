@@ -1,4 +1,4 @@
 pub mod error;
-pub mod flagsmith;
-pub use crate::flagsmith::models::Flag;
-pub use crate::flagsmith::{Flagsmith, FlagsmithOptions};
+pub mod flagsmith_async;
+pub use crate::flagsmith_async::models::Flag;
+pub use crate::flagsmith_async::{Flagsmith, FlagsmithOptions};

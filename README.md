@@ -3,6 +3,9 @@
 [![Rust](https://github.com/Flagsmith/flagsmith-rust-client/workflows/Rust/badge.svg)](https://github.com/Flagsmith/flagsmith-rust-client/actions?query=workflow%3ARust)
 
 ![Flagsmith Screenshot](https://github.com/Flagsmith/flagsmith/raw/main/static-files/hero.png)
+# Disclaimer
+
+This is an async version (based on Tokio runtime) of original [Flagsmith Rust Client](https://github.com/Flagsmith/flagsmith-rust-client), with some minor tweaks added.
 
 # Flagsmith Rust SDK
 

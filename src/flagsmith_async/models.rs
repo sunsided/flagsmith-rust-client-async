@@ -1,4 +1,4 @@
-use crate::flagsmith::analytics::AnalyticsProcessor;
+use crate::flagsmith_async::analytics::AnalyticsProcessor;
 use core::f64;
 use flagsmith_flag_engine::features::FeatureState;
 use flagsmith_flag_engine::types::{FlagsmithValue, FlagsmithValueType};
@@ -55,12 +55,24 @@ impl Flag {
             _ => None,
         }
     }
-    pub fn value_as_f64(&self) -> Option<f64> {
+    pub fn value_as_f32(&self) -> Option<f32> {
         match self.value.value_type {
-            FlagsmithValueType::Float => Some(self.value.value.parse::<f64>().ok()?),
+            FlagsmithValueType::String => Some(self.value.value.parse::<f32>().ok()?),
             _ => None,
         }
     }
+    pub fn value_as_f64(&self) -> Option<f64> {
+        match self.value.value_type {
+            FlagsmithValueType::String => Some(self.value.value.parse::<f64>().ok()?),
+            _ => None,
+        }
+    }
+    pub fn value_as_i32(&self) -> Option<i32> {
+        match self.value.value_type {
+            FlagsmithValueType::Integer => Some(self.value.value.parse::<i32>().ok()?),
+            _ => None,
+        }
+    }    
     pub fn value_as_i64(&self) -> Option<i64> {
         match self.value.value_type {
             FlagsmithValueType::Integer => Some(self.value.value.parse::<i64>().ok()?),
