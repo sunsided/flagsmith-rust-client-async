@@ -2,7 +2,7 @@ use httpmock::prelude::*;
 use rstest::*;
 use serde_json;
 
-use flagsmith::{Flagsmith, FlagsmithOptions};
+use flagsmith_async::{Flagsmith, FlagsmithOptions};
 pub static FEATURE_1_NAME: &str = "feature_1";
 pub static FEATURE_1_ID: u32 = 1;
 pub static FEATURE_1_STR_VALUE: &str = "some_value";
@@ -134,9 +134,9 @@ pub fn identities_json() -> serde_json::Value {
 }
 
 #[fixture]
-pub fn default_flag_handler() -> fn(&str) -> flagsmith::Flag {
-    fn handler(_feature_name: &str) -> flagsmith::Flag {
-        let mut default_flag = flagsmith::Flag::default();
+pub fn default_flag_handler() -> fn(&str) -> flagsmith_async::Flag {
+    fn handler(_feature_name: &str) -> flagsmith_async::Flag {
+        let mut default_flag = flagsmith_async::Flag::default();
         default_flag.enabled = true;
         default_flag.is_default = true;
         default_flag.value.value_type = flagsmith_flag_engine::types::FlagsmithValueType::String;

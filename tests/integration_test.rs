@@ -1,4 +1,4 @@
-use flagsmith::{Flagsmith, FlagsmithOptions};
+use flagsmith_async::{Flagsmith, FlagsmithOptions};
 use flagsmith_flag_engine::identities::Trait;
 use flagsmith_flag_engine::types::{FlagsmithValue, FlagsmithValueType};
 
@@ -230,7 +230,7 @@ async fn test_get_identity_flags_calls_api_when_no_local_environment_with_traits
 async fn test_default_flag_is_not_used_when_environment_flags_returned(
     mock_server: MockServer,
     flags_json: serde_json::Value,
-    default_flag_handler: fn(&str) -> flagsmith::Flag,
+    default_flag_handler: fn(&str) -> flagsmith_async::Flag,
 ) {
     let api_mock = mock_server.mock(|when, then| {
         when.method(GET)
@@ -266,7 +266,7 @@ async fn test_default_flag_is_not_used_when_environment_flags_returned(
 async fn test_default_flag_is_used_when_no_matching_environment_flag_returned(
     mock_server: MockServer,
     flags_json: serde_json::Value,
-    default_flag_handler: fn(&str) -> flagsmith::Flag,
+    default_flag_handler: fn(&str) -> flagsmith_async::Flag,
 ) {
     let api_mock = mock_server.mock(|when, then| {
         when.method(GET)
@@ -300,7 +300,7 @@ async fn test_default_flag_is_used_when_no_matching_environment_flag_returned(
 async fn test_default_flag_is_not_used_when_identity_flags_returned(
     mock_server: MockServer,
     identities_json: serde_json::Value,
-    default_flag_handler: fn(&str) -> flagsmith::Flag,
+    default_flag_handler: fn(&str) -> flagsmith_async::Flag,
 ) {
     // Given
     let identifier = "test_identity";
@@ -345,7 +345,7 @@ async fn test_default_flag_is_not_used_when_identity_flags_returned(
 async fn test_default_flag_is_used_when_no_matching_identity_flags_returned(
     mock_server: MockServer,
     identities_json: serde_json::Value,
-    default_flag_handler: fn(&str) -> flagsmith::Flag,
+    default_flag_handler: fn(&str) -> flagsmith_async::Flag,
 ) {
     // Given
     let identifier = "test_identity";
@@ -387,7 +387,7 @@ async fn test_default_flag_is_used_when_no_matching_identity_flags_returned(
 #[tokio::test]
 async fn test_default_flags_are_used_if_api_error_and_default_flag_handler_given_for_environment(
     mock_server: MockServer,
-    default_flag_handler: fn(&str) -> flagsmith::Flag,
+    default_flag_handler: fn(&str) -> flagsmith_async::Flag,
 ) {
     // Give
     let api_mock = mock_server.mock(|when, then| {
@@ -421,7 +421,7 @@ async fn test_default_flags_are_used_if_api_error_and_default_flag_handler_given
 #[tokio::test]
 async fn test_default_flags_are_used_if_api_error_and_default_flag_handler_given_for_identity(
     mock_server: MockServer,
-    default_flag_handler: fn(&str) -> flagsmith::Flag,
+    default_flag_handler: fn(&str) -> flagsmith_async::Flag,
 ) {
     // Given
     let identifier = "test_identity";
@@ -480,7 +480,7 @@ async fn test_flagsmith_api_error_is_returned_if_something_goes_wrong_with_the_r
 
     // When
     let err = flagsmith.get_environment_flags().await.err().unwrap();
-    assert_eq!(err.kind, flagsmith::error::ErrorKind::FlagsmithAPIError);
+    assert_eq!(err.kind, flagsmith_async::error::ErrorKind::FlagsmithAPIError);
 }
 
 #[rstest]
@@ -512,7 +512,7 @@ async fn test_flagsmith_client_error_is_returned_if_get_flag_is_called_with_a_fl
         .unwrap();
 
     // Then
-    assert_eq!(err.kind, flagsmith::error::ErrorKind::FlagsmithAPIError);
+    assert_eq!(err.kind, flagsmith_async::error::ErrorKind::FlagsmithAPIError);
 }
 
 #[rstest]
