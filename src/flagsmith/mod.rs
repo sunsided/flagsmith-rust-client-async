@@ -124,6 +124,7 @@ impl Flagsmith {
                     );
                     let mut data = ds.lock().await;
                     data.environment = environment;
+                    drop(data);
                     tokio::time::sleep(Duration::from_millis(environment_refresh_interval_mills)).await;
                 }
             });
