@@ -57,12 +57,14 @@ impl Flag {
     }
     pub fn value_as_f32(&self) -> Option<f32> {
         match self.value.value_type {
+            FlagsmithValueType::Float => Some(self.value.value.parse::<f32>().ok()?),
             FlagsmithValueType::String => Some(self.value.value.parse::<f32>().ok()?),
             _ => None,
         }
     }
     pub fn value_as_f64(&self) -> Option<f64> {
         match self.value.value_type {
+            FlagsmithValueType::Float => Some(self.value.value.parse::<f64>().ok()?),
             FlagsmithValueType::String => Some(self.value.value.parse::<f64>().ok()?),
             _ => None,
         }
