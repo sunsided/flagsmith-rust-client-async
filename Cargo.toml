@@ -1,6 +1,6 @@
 [package]
 name = "flagsmith-async"
-version = "1.0.3"
+version = "1.0.4"
 authors = ["Gagan Trivedi <gagan.trivedi@flagsmith.com>", "Michał Buczko <michal@buczko.pl>"]
 edition = "2021"
 license = "BSD-3-Clause"
