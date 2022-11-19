@@ -117,14 +117,15 @@ impl Flagsmith {
                         Err(TryRecvError::Empty) => {}
                     }
 
-                    let environment = Some(
-                        get_environment_from_api(&client, environment_url.clone())
-                            .await
-                            .expect("updating environment document failed"),
-                    );
-                    let mut data = ds.lock().await;
-                    data.environment = environment;
-                    drop(data);
+                    let environment = get_environment_from_api(&client, environment_url.clone()).await;
+
+                    if let Err(err) = environment {
+                        log::error!("updating environment document failed: {}", err);
+                    } else {
+                        let mut data = ds.lock().await;
+                        data.environment = Some(environment.unwrap());
+                        drop(data);
+                    }
                     tokio::time::sleep(Duration::from_millis(environment_refresh_interval_mills)).await;
                 }
             });
@@ -341,8 +342,6 @@ async fn get_json_response(
     url: String,
     body: Option<String>,
 ) -> Result<serde_json::Value, error::Error> {
-    log::debug!("{}: {}", method, url);
-
     let mut request = client.request(method, url);
     if body.is_some() {
         request = request.body(body.unwrap());
