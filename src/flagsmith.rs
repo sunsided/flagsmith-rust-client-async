@@ -1,9 +1,9 @@
 use flagsmith_flag_engine::engine;
-use flagsmith_flag_engine::environments::builders::build_environment_struct;
 use flagsmith_flag_engine::environments::Environment;
+use flagsmith_flag_engine::environments::builders::build_environment_struct;
 use flagsmith_flag_engine::identities::{Identity, Trait};
-use flagsmith_flag_engine::segments::evaluator::get_identity_segments;
 use flagsmith_flag_engine::segments::Segment;
+use flagsmith_flag_engine::segments::evaluator::get_identity_segments;
 use futures::lock::Mutex;
 use log::debug;
 use reqwest::header::{self, HeaderMap};
@@ -117,7 +117,8 @@ impl Flagsmith {
                         Err(TryRecvError::Empty) => {}
                     }
 
-                    let environment = get_environment_from_api(&client, environment_url.clone()).await;
+                    let environment =
+                        get_environment_from_api(&client, environment_url.clone()).await;
 
                     if let Err(err) = environment {
                         log::error!("updating environment document failed: {}", err);
@@ -126,7 +127,8 @@ impl Flagsmith {
                         data.environment = Some(environment.unwrap());
                         drop(data);
                     }
-                    tokio::time::sleep(Duration::from_millis(environment_refresh_interval_mills)).await;
+                    tokio::time::sleep(Duration::from_millis(environment_refresh_interval_mills))
+                        .await;
                 }
             });
         }

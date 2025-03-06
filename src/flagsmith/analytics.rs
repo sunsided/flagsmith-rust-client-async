@@ -3,7 +3,7 @@ use reqwest::header::HeaderMap;
 use serde_json;
 use std::collections::HashMap;
 use std::sync::mpsc::{SyncSender, TryRecvError};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use tokio::sync::RwLock;
 
 static ANALYTICS_TIMER_IN_MILLI: u64 = 10 * 1000;

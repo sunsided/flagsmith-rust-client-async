@@ -7,13 +7,13 @@ use rstest::*;
 
 mod fixtures;
 
+use fixtures::ENVIRONMENT_KEY;
 use fixtures::default_flag_handler;
 use fixtures::environment_json;
 use fixtures::flags_json;
 use fixtures::identities_json;
 use fixtures::local_eval_flagsmith;
 use fixtures::mock_server;
-use fixtures::ENVIRONMENT_KEY;
 
 #[rstest]
 #[tokio::test]
@@ -480,7 +480,10 @@ async fn test_flagsmith_api_error_is_returned_if_something_goes_wrong_with_the_r
 
     // When
     let err = flagsmith.get_environment_flags().await.err().unwrap();
-    assert_eq!(err.kind, flagsmith_async::error::ErrorKind::FlagsmithAPIError);
+    assert_eq!(
+        err.kind,
+        flagsmith_async::error::ErrorKind::FlagsmithAPIError
+    );
 }
 
 #[rstest]
@@ -512,7 +515,10 @@ async fn test_flagsmith_client_error_is_returned_if_get_flag_is_called_with_a_fl
         .unwrap();
 
     // Then
-    assert_eq!(err.kind, flagsmith_async::error::ErrorKind::FlagsmithAPIError);
+    assert_eq!(
+        err.kind,
+        flagsmith_async::error::ErrorKind::FlagsmithAPIError
+    );
 }
 
 #[rstest]

@@ -1,4 +1,4 @@
-use crate::flagsmith_async::analytics::AnalyticsProcessor;
+use crate::flagsmith::analytics::AnalyticsProcessor;
 use core::f64;
 use flagsmith_flag_engine::features::FeatureState;
 use flagsmith_flag_engine::types::{FlagsmithValue, FlagsmithValueType};
@@ -74,7 +74,7 @@ impl Flag {
             FlagsmithValueType::Integer => Some(self.value.value.parse::<i32>().ok()?),
             _ => None,
         }
-    }    
+    }
     pub fn value_as_i64(&self) -> Option<i64> {
         match self.value.value_type {
             FlagsmithValueType::Integer => Some(self.value.value.parse::<i64>().ok()?),
@@ -110,6 +110,7 @@ impl Flags {
             default_flag_handler,
         }
     }
+
     pub fn from_api_flags(
         api_flags: &Vec<serde_json::Value>,
         analytics_processor: Option<AnalyticsProcessor>,
