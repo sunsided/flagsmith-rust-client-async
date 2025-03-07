@@ -12,13 +12,13 @@ categories = ["config", "api-bindings"]
 keywords = ["Flagsmith", "feature-flag", "remote-config"]
 
 [dependencies]
-tokio = {version = "1.43"}
-futures = {version = "0.3"}
-serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.43", default-features = false }
+futures = { version = "0.3" }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
-reqwest = { version = "0.12.12", features = ["json"] }
+reqwest = { version = "0.12.12", default-features = false, features = ["json"] }
 url = "2.1"
-chrono = { version = "0.4"}
+chrono = { version = "0.4", default-features = false }
 log = "0.4"
 flagsmith-flag-engine = "0.4.0"
 
